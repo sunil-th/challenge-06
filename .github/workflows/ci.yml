@@ -1,0 +1,78 @@
+name: infra-deploy-and-configure
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      TF_IN_AUTOMATION: "true"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: "1.5.6"
+
+      - name: Terraform Init
+        working-directory: terraform
+        run: terraform init -input=false
+
+      - name: Terraform Apply
+        working-directory: terraform
+        run: terraform apply -auto-approve -input=false
+
+      - name: Save Terraform outputs
+        working-directory: terraform
+        run: terraform output -json > tf_outputs.json
+
+      - name: Generate inventory.ini from terraform outputs
+        working-directory: terraform
+        run: |
+          python3 - <<'PY'
+import json, os
+o=json.load(open('tf_outputs.json'))
+f_pub=o['frontend_public_ip']['value']
+f_priv=o['frontend_private_ip']['value']
+b_pub=o['backend_public_ip']['value']
+b_priv=o['backend_private_ip']['value']
+key_path=o['ansible_key_path']['value']
+inv = f"""[frontend]
+c8.local ansible_host={f_pub} ansible_user=ec2-user ansible_ssh_private_key_file={key_path} ansible_private_ip={f_priv}
+
+[backend]
+u21.local ansible_host={b_pub} ansible_user=ubuntu ansible_ssh_private_key_file={key_path} ansible_private_ip={b_priv}
+"""
+open('inventory.ini','w').write(inv)
+print('WROTE inventory.ini')
+PY
+
+      - name: Show inventory (debug)
+        working-directory: terraform
+        run: cat inventory.ini
+
+      - name: Install Ansible
+        run: |
+          python3 -m pip install --user ansible
+
+      - name: Ensure key perms correct
+        working-directory: terraform
+        run: |
+          chmod 600 ansible_key.pem
+
+      - name: Run Ansible playbook
+        run: |
+          ~/.local/bin/ansible-playbook -i terraform/inventory.ini ../ansible/site.yml --ssh-extra-args='-o StrictHostKeyChecking=no'
+     

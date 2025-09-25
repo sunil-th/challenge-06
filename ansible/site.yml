@@ -1,0 +1,82 @@
+- name: Common: disable selinux/firewalld (where applicable)
+  hosts: all
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Disable SELinux on RedHat-like systems
+      ansible.builtin.selinux:
+        state: disabled
+      when: ansible_facts['os_family'] == "RedHat"
+
+    - name: Stop and disable firewalld on RedHat-like systems
+      ansible.builtin.service:
+        name: firewalld
+        state: stopped
+        enabled: false
+      when: ansible_facts['os_family'] == "RedHat"
+
+- name: Configure frontend (nginx proxy to backend:19999)
+  hosts: frontend
+  become: true
+  vars:
+    nginx_upstream_port: 19999
+  tasks:
+    - name: Install nginx
+      ansible.builtin.package:
+        name: nginx
+        state: present
+
+    - name: Ensure nginx is started and enabled
+      ansible.builtin.service:
+        name: nginx
+        state: started
+        enabled: true
+
+    - name: Deploy nginx proxy config
+      ansible.builtin.template:
+        src: templates/nginx_proxy.conf.j2
+        dest: /etc/nginx/conf.d/proxy_to_netdata.conf
+        mode: 0644
+      notify: Reload nginx
+
+  handlers:
+    - name: Reload nginx
+      ansible.builtin.service:
+        name: nginx
+        state: reloaded
+
+- name: Configure backend (install Netdata, run on port 19999)
+  hosts: backend
+  become: true
+  vars:
+    netdata_port: 19999
+  tasks:
+    - name: Ensure apt cache updated (Debian/Ubuntu)
+      ansible.builtin.apt:
+        update_cache: yes
+      when: ansible_facts['os_family'] == "Debian"
+
+    - name: Install netdata via official installer (idempotent)
+      ansible.builtin.shell: >
+        curl -sSL https://my-netdata.io/kickstart.sh | bash -s -- -stable
+      args:
+        creates: /usr/sbin/netdata
+
+    - name: Deploy netdata config
+      ansible.builtin.template:
+        src: templates/netdata.conf.j2
+        dest: /etc/netdata/netdata.conf
+        mode: 0644
+      notify: Restart netdata
+
+    - name: Ensure netdata is started and enabled
+      ansible.builtin.service:
+        name: netdata
+        state: started
+        enabled: true
+
+  handlers:
+    - name: Restart netdata
+      ansible.builtin.service:
+        name: netdata
+        state: restarted
