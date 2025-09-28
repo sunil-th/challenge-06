@@ -36,28 +36,32 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Navigate to terraform folder
 cd terraform
 
-# Read Terraform outputs (ensure terraform init & apply has been run)
-c8_pub=$(terraform output -raw c8_public_ip)
+# Read outputs safely
 c8_priv=$(terraform output -raw c8_private_ip)
-u21_pub=$(terraform output -raw u21_public_ip)
 u21_priv=$(terraform output -raw u21_private_ip)
-key_file="${PWD}/../.ci_keys/id_rsa"
 
 cd ..
 
-# Generate Ansible inventory
+KEY_FILE="$PWD/.ci_keys/id_rsa"
+
+# Validate variables
+if [[ -z "$c8_priv" || -z "$u21_priv" ]]; then
+  echo "Error: Terraform outputs are empty. Run 'terraform apply' first."
+  exit 1
+fi
+
+# Generate inventory
 cat > ansible/inventory.ini <<EOF
 [frontend]
-c8.local ansible_host=${c8_priv} ansible_user=ec2-user ansible_ssh_private_key_file=${key_file}
+c8.local ansible_host=${c8_priv} ansible_user=ec2-user ansible_ssh_private_key_file=${KEY_FILE}
 
 [backend]
-u21.local ansible_host=${u21_priv} ansible_user=ubuntu ansible_ssh_private_key_file=${key_file}
+u21.local ansible_host=${u21_priv} ansible_user=ubuntu ansible_ssh_private_key_file=${KEY_FILE}
 
 [all:vars]
 ansible_python_interpreter=/usr/bin/python3
 EOF
 
-echo "✅ Wrote ansible/inventory.ini"
+echo "✅ Wrote ansible/inventory.ini successfully"
