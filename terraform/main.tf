@@ -1,78 +1,59 @@
-# generate an SSH key pair locally (private in a file)
-resource "tls_private_key" "ansible_key" {
-  algorithm = "RSA"
-  rsa_bits  = 4096
+# Make a security group if none provided
+resource "aws_vpc" "default" {
+  cidr_block = "10.0.0.0/16"
+  tags = { Name = "ci-vpc" }
 }
 
-resource "random_id" "suffix" {
-  byte_length = 4
+resource "aws_subnet" "default" {
+  vpc_id            = aws_vpc.default.id
+  cidr_block        = "10.0.1.0/24"
+  availability_zone = "${var.aws_region}a"
+  tags = { Name = "ci-subnet" }
 }
 
-resource "aws_key_pair" "ansible" {
-  key_name   = "ci-ansible-key-${random_id.suffix.hex}"
-  public_key = tls_private_key.ansible_key.public_key_openssh
+resource "aws_internet_gateway" "gw" {
+  vpc_id = aws_vpc.default.id
 }
 
-resource "local_file" "private_key_pem" {
-  content         = tls_private_key.ansible_key.private_key_pem
-  filename        = "${path.module}/ansible_key.pem"
-  file_permission = "0600"
+resource "aws_route_table" "r" {
+  vpc_id = aws_vpc.default.id
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.gw.id
+  }
 }
 
-# default VPC/subnets
-data "aws_vpc" "default" {
-  default = true
+resource "aws_route_table_association" "r_assoc" {
+  subnet_id      = aws_subnet.default.id
+  route_table_id = aws_route_table.r.id
 }
 
-data "aws_subnet_ids" "default" {
-  vpc_id = data.aws_vpc.default.id
-}
-
-# Frontend SG (allow SSH, HTTP)
-resource "aws_security_group" "frontend_sg" {
-  name        = "frontend-sg-${random_id.suffix.hex}"
-  description = "frontend sg"
-  vpc_id      = data.aws_vpc.default.id
+resource "aws_security_group" "allow_ssh_http_netdata" {
+  name   = "ci-sg"
+  vpc_id = aws_vpc.default.id
 
   ingress {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
+    description = "SSH"
   }
+
   ingress {
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
+    description = "HTTP"
   }
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-}
-
-# Backend SG (allow SSH, allow 19999 from frontend SG)
-resource "aws_security_group" "backend_sg" {
-  name        = "backend-sg-${random_id.suffix.hex}"
-  description = "backend sg"
-  vpc_id      = data.aws_vpc.default.id
 
   ingress {
-    from_port   = 22
-    to_port     = 22
+    from_port   = 19999
+    to_port     = 19999
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    from_port       = 19999
-    to_port         = 19999
-    protocol        = "tcp"
-    security_groups = [aws_security_group.frontend_sg.id]
-    description     = "allow netdata from frontend"
+    description = "Netdata"
   }
 
   egress {
@@ -81,9 +62,21 @@ resource "aws_security_group" "backend_sg" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
+
+  tags = { Name = "ci-sg" }
 }
 
-# AMI lookups
+# Key pair created from public key passed in variable
+resource "aws_key_pair" "ci_key" {
+  key_name   = "ci_key_${random_id.rnd.hex}"
+  public_key = var.public_key
+}
+
+resource "random_id" "rnd" {
+  byte_length = 4
+}
+
+# AMI lookup - Amazon Linux 2 and Ubuntu 21.04 (by name pattern)
 data "aws_ami" "amazon_linux" {
   most_recent = true
   owners      = ["amazon"]
@@ -93,27 +86,37 @@ data "aws_ami" "amazon_linux" {
   }
 }
 
-data "aws_ami" "ubuntu2104" {
+# data "aws_ami" "ubuntu_2104" {
+#   most_recent = true
+#   owners      = ["099720109477"] # Canonical
+#   filter {
+#     name   = "name"
+#     values = ["ubuntu/images/hvm-ssd/ubuntu-*-21.04*"]
+#   }
+# }
+
+
+data "aws_ami" "ubuntu_2104" {
   most_recent = true
-  owners      = ["099720109477"] # Canonical owner
+  owners      = ["099720109477"] # Canonical
   filter {
     name   = "name"
-    values = ["ubuntu/images/hvm-ssd/ubuntu-kinetic-21.04-amd64-server-*"]
+    values = ["ubuntu/images/hvm-ssd/ubuntu-*-22.04-amd64-server-*"]
   }
 }
 
-locals {
-  ubuntu_ami = length(var.ubuntu_ami_id) > 0 ? var.ubuntu_ami_id : data.aws_ami.ubuntu2104.id
-}
 
-# Instance: c8.local (Amazon Linux)
+
 resource "aws_instance" "c8" {
   ami                    = data.aws_ami.amazon_linux.id
   instance_type          = var.instance_type
-  key_name               = aws_key_pair.ansible.key_name
-  vpc_security_group_ids = [aws_security_group.frontend_sg.id]
-  subnet_id              = data.aws_subnet_ids.default.ids[0]
-  tags = { Name = "c8.local" }
+  subnet_id              = aws_subnet.default.id
+  key_name               = aws_key_pair.ci_key.key_name
+  vpc_security_group_ids = [aws_security_group.allow_ssh_http_netdata.id]
+  tags = {
+    Name     = "c8.local"
+    Hostname = "c8.local"
+  }
 
   user_data = <<-EOF
               #!/bin/bash
@@ -121,17 +124,41 @@ resource "aws_instance" "c8" {
               EOF
 }
 
-# Instance: u21.local (Ubuntu 21.04)
 resource "aws_instance" "u21" {
-  ami                    = local.ubuntu_ami
+  ami                    = data.aws_ami.ubuntu_2104.id
   instance_type          = var.instance_type
-  key_name               = aws_key_pair.ansible.key_name
-  vpc_security_group_ids = [aws_security_group.backend_sg.id]
-  subnet_id              = data.aws_subnet_ids.default.ids[0]
-  tags = { Name = "u21.local" }
+  subnet_id              = aws_subnet.default.id
+  key_name               = aws_key_pair.ci_key.key_name
+  vpc_security_group_ids = [aws_security_group.allow_ssh_http_netdata.id]
+  tags = {
+    Name     = "u21.local"
+    Hostname = "u21.local"
+  }
 
   user_data = <<-EOF
               #!/bin/bash
               hostnamectl set-hostname u21.local
               EOF
+}
+
+# outputs
+output "c8_public_ip" {
+  value = aws_instance.c8.public_ip
+}
+
+output "c8_private_ip" {
+  value = aws_instance.c8.private_ip
+}
+
+output "u21_public_ip" {
+  value = aws_instance.u21.public_ip
+}
+
+output "u21_private_ip" {
+  value = aws_instance.u21.private_ip
+}
+
+output "ssh_private_key_path_for_ci" {
+  value = aws_key_pair.ci_key.key_name
+  description = "Key name used in AWS - CI keeps private key locally (generated in CI)."
 }

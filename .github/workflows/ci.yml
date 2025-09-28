@@ -1,9 +1,10 @@
-name: infra-deploy-and-configure
+name: CI Deploy Terraform + Ansible
 
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
+    branches:
+      - main
 
 jobs:
   deploy:
@@ -11,68 +12,62 @@ jobs:
     env:
       TF_IN_AUTOMATION: "true"
     steps:
-      - name: Checkout
+      - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
+      - name: Setup Python (for ansible)
+        uses: actions/setup-python@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+          python-version: '3.11'
+
+      - name: Generate SSH key for instances (kept in workspace)
+        run: |
+          mkdir -p .ci_keys
+          ssh-keygen -t rsa -b 4096 -N "" -f .ci_keys/id_rsa
+          chmod 600 .ci_keys/id_rsa
+          echo "Private key and public key generated"
+
+      - name: Set TF_VAR_public_key environment variable
+        id: set_pub
+        run: |
+          echo "TF_VAR_public_key<<EOF" >> $GITHUB_ENV
+          cat .ci_keys/id_rsa.pub >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
         with:
-          terraform_version: "1.5.6"
+          terraform_version: 1.5.0
 
-      - name: Terraform Init
+      - name: Terraform init
         working-directory: terraform
         run: terraform init -input=false
 
-      - name: Terraform Apply
+      - name: Terraform apply
         working-directory: terraform
-        run: terraform apply -auto-approve -input=false
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+        run: terraform apply -auto-approve
 
-      - name: Save Terraform outputs
-        working-directory: terraform
-        run: terraform output -json > tf_outputs.json
-
-      - name: Generate inventory.ini from terraform outputs
-        working-directory: terraform
+      - name: Render Ansible inventory
         run: |
-          python3 - <<'PY'
-import json, os
-o=json.load(open('tf_outputs.json'))
-f_pub=o['frontend_public_ip']['value']
-f_priv=o['frontend_private_ip']['value']
-b_pub=o['backend_public_ip']['value']
-b_priv=o['backend_private_ip']['value']
-key_path=o['ansible_key_path']['value']
-inv = f"""[frontend]
-c8.local ansible_host={f_pub} ansible_user=ec2-user ansible_ssh_private_key_file={key_path} ansible_private_ip={f_priv}
-
-[backend]
-u21.local ansible_host={b_pub} ansible_user=ubuntu ansible_ssh_private_key_file={key_path} ansible_private_ip={b_priv}
-"""
-open('inventory.ini','w').write(inv)
-print('WROTE inventory.ini')
-PY
-
-      - name: Show inventory (debug)
-        working-directory: terraform
-        run: cat inventory.ini
+          chmod +x ansible/inventory_template.sh
+          ./ansible/inventory_template.sh
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
 
       - name: Install Ansible
         run: |
-          python3 -m pip install --user ansible
+          python -m pip install --upgrade pip
+          pip install ansible
 
-      - name: Ensure key perms correct
-        working-directory: terraform
+      - name: Run Ansible playbooks
+        working-directory: ansible
         run: |
-          chmod 600 ansible_key.pem
-
-      - name: Run Ansible playbook
-        run: |
-          ~/.local/bin/ansible-playbook -i terraform/inventory.ini ../ansible/site.yml --ssh-extra-args='-o StrictHostKeyChecking=no'
-     
+          ansible-playbook -i inventory.ini site.yml --private-key ../.ci_keys/id_rsa -u ec2-user
+        env:
+          ANSIBLE_DEPRECATION_WARNINGS: "False"
