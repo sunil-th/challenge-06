@@ -17,8 +17,10 @@
     state: started
     enabled: yes
 
-handlers:
+  handlers:
   - name: restart nginx
     systemd:
       name: nginx
       state: restarted
+
+

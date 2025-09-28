@@ -28,7 +28,7 @@
   notify: restart netdata
   ignore_errors: yes
 
-handlers:
+  handlers:
   - name: restart netdata
     systemd:
       name: netdata
