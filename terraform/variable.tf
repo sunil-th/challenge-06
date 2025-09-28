@@ -10,7 +10,7 @@ variable "public_key" {
 
 variable "instance_type" {
   type    = string
-  default = "t3.micro"
+  default = "t2.micro"
 }
 
 variable "vpc_security_group_ids" {
