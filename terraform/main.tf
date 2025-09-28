@@ -113,6 +113,7 @@ resource "aws_instance" "c8" {
   subnet_id              = aws_subnet.default.id
   key_name               = aws_key_pair.ci_key.key_name
   vpc_security_group_ids = [aws_security_group.allow_ssh_http_netdata.id]
+   associate_public_ip_address = true   # ✅ this enables public IP
   tags = {
     Name     = "c8.local"
     Hostname = "c8.local"
@@ -130,6 +131,7 @@ resource "aws_instance" "u21" {
   subnet_id              = aws_subnet.default.id
   key_name               = aws_key_pair.ci_key.key_name
   vpc_security_group_ids = [aws_security_group.allow_ssh_http_netdata.id]
+   associate_public_ip_address = true   # ✅ add this
   tags = {
     Name     = "u21.local"
     Hostname = "u21.local"
