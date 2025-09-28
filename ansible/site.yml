@@ -1,113 +1,131 @@
+# ---
+# - name: common tasks for all linux hosts
+#   hosts: all
+#   gather_facts: yes
+#   become: yes
+#   tasks:
+#     - name: ensure /etc/hosts contains hostnames for cluster
+#       lineinfile:
+#         path: /etc/hosts
+#         regexp: "{{ item.ip }}\\s+{{ item.name }}"
+#         line: "{{ item.ip }} {{ item.name }}"
+#         state: present
+#       loop:
+#         - { ip: "{{ hostvars['c8.local']['ansible_host'] | default(hostvars[inventory_hostname]['ansible_host'] | default('')) }}", name: "c8.local" }
+#         - { ip: "{{ hostvars['u21.local']['ansible_host'] | default(hostvars[inventory_hostname]['ansible_host'] | default('')) }}", name: "u21.local" }
+#       when: hostvars['c8.local'] is defined and hostvars['u21.local'] is defined
+
+#     - name: Disable SELinux on RedHat family
+#       ansible.builtin.command: setenforce 0
+#       when: ansible_facts['os_family'] == 'RedHat'
+#       ignore_errors: yes
+
+#     - name: Persist SELinux disabled in /etc/selinux/config
+#       ansible.builtin.replace:
+#         path: /etc/selinux/config
+#         regexp: '^SELINUX=.*'
+#         replace: 'SELINUX=disabled'
+#       when: ansible_facts['os_family'] == 'RedHat'
+#       ignore_errors: yes
+
+#     - name: stop and disable firewalld if present (RedHat)
+#       ansible.builtin.service:
+#         name: firewalld
+#         state: stopped
+#         enabled: false
+#       when: ansible_facts['os_family'] == 'RedHat'
+#       ignore_errors: yes
+
+#     - name: ensure ufw is disabled on Debian/Ubuntu (if present)
+#       ansible.builtin.service:
+#         name: ufw
+#         state: stopped
+#         enabled: false
+#       when: ansible_facts['os_family'] == 'Debian'
+#       ignore_errors: yes
+
+# - name: Setup frontend (nginx) on c8.local
+#   hosts: frontend
+#   become: yes
+#   gather_facts: yes
+#   tasks:
+#     - name: Install nginx (RedHat or Debian)
+#       ansible.builtin.package:
+#         name: "{{ 'nginx' }}"
+#         state: present
+
+#     - name: Create backend upstream nginx conf from backend hosts
+#       template:
+#         src: templates/nginx_netdata.j2
+#         dest: /etc/nginx/conf.d/netdata_upstream.conf
+#         owner: root
+#         group: root
+#         mode: '0644'
+#       notify: restart nginx
+
+#   handlers:
+#     - name: restart nginx
+#       ansible.builtin.service:
+#         name: nginx
+#         state: restarted
+#         enabled: yes
+
+# - name: Setup backend (netdata) on u21.local
+#   hosts: backend
+#   become: yes
+#   gather_facts: yes
+#   tasks:
+#     - name: Ensure curl and prerequisites present
+#       ansible.builtin.package:
+#         name: "{{ item }}"
+#         state: present
+#       loop:
+#         - curl
+#         - sudo
+#       when: ansible_facts['pkg_mgr'] != 'yum' or ansible_facts['pkg_mgr'] == 'yum'
+#       # package module auto-selects manager
+
+#     - name: Install Netdata using official kickstart (idempotent guard)
+#       ansible.builtin.shell: |
+#         if ! command -v netdata >/dev/null 2>&1; then
+#           bash <(curl -Ss https://my-netdata.io/kickstart.sh) --dont-wait
+#         fi
+#       args:
+#         warn: false
+#       register: netdata_install
+#       changed_when: "'Installing' in netdata_install.stdout or netdata_install.rc == 0 and netdata_install.stdout|length>0"
+#       become: yes
+
+#     - name: ensure netdata service is running and enabled
+#       ansible.builtin.service:
+#         name: netdata
+#         enabled: yes
+#         state: started
+#       ignore_errors: yes
+
+#     - name: Ensure netdata listens on 19999 in its config (if config exists)
+#       ansible.builtin.lineinfile:
+#         path: /etc/netdata/netdata.conf
+#         regexp: '^  bind to ='
+#         insertafter: '^bind to ='
+#         line: '  bind to = 0.0.0.0'
+#       when: ansible.builtin.stat(path='/etc/netdata/netdata.conf').stat.exists
+#       ignore_errors: yes
+
+
+
 ---
-- name: common tasks for all linux hosts
-  hosts: all
-  gather_facts: yes
+- hosts: all
   become: yes
-  tasks:
-    - name: ensure /etc/hosts contains hostnames for cluster
-      lineinfile:
-        path: /etc/hosts
-        regexp: "{{ item.ip }}\\s+{{ item.name }}"
-        line: "{{ item.ip }} {{ item.name }}"
-        state: present
-      loop:
-        - { ip: "{{ hostvars['c8.local']['ansible_host'] | default(hostvars[inventory_hostname]['ansible_host'] | default('')) }}", name: "c8.local" }
-        - { ip: "{{ hostvars['u21.local']['ansible_host'] | default(hostvars[inventory_hostname]['ansible_host'] | default('')) }}", name: "u21.local" }
-      when: hostvars['c8.local'] is defined and hostvars['u21.local'] is defined
+  roles:
+    - common
 
-    - name: Disable SELinux on RedHat family
-      ansible.builtin.command: setenforce 0
-      when: ansible_facts['os_family'] == 'RedHat'
-      ignore_errors: yes
-
-    - name: Persist SELinux disabled in /etc/selinux/config
-      ansible.builtin.replace:
-        path: /etc/selinux/config
-        regexp: '^SELINUX=.*'
-        replace: 'SELINUX=disabled'
-      when: ansible_facts['os_family'] == 'RedHat'
-      ignore_errors: yes
-
-    - name: stop and disable firewalld if present (RedHat)
-      ansible.builtin.service:
-        name: firewalld
-        state: stopped
-        enabled: false
-      when: ansible_facts['os_family'] == 'RedHat'
-      ignore_errors: yes
-
-    - name: ensure ufw is disabled on Debian/Ubuntu (if present)
-      ansible.builtin.service:
-        name: ufw
-        state: stopped
-        enabled: false
-      when: ansible_facts['os_family'] == 'Debian'
-      ignore_errors: yes
-
-- name: Setup frontend (nginx) on c8.local
-  hosts: frontend
+- hosts: frontend
   become: yes
-  gather_facts: yes
-  tasks:
-    - name: Install nginx (RedHat or Debian)
-      ansible.builtin.package:
-        name: "{{ 'nginx' }}"
-        state: present
+  roles:
+    - frontend
 
-    - name: Create backend upstream nginx conf from backend hosts
-      template:
-        src: templates/nginx_netdata.j2
-        dest: /etc/nginx/conf.d/netdata_upstream.conf
-        owner: root
-        group: root
-        mode: '0644'
-      notify: restart nginx
-
-  handlers:
-    - name: restart nginx
-      ansible.builtin.service:
-        name: nginx
-        state: restarted
-        enabled: yes
-
-- name: Setup backend (netdata) on u21.local
-  hosts: backend
+- hosts: backend
   become: yes
-  gather_facts: yes
-  tasks:
-    - name: Ensure curl and prerequisites present
-      ansible.builtin.package:
-        name: "{{ item }}"
-        state: present
-      loop:
-        - curl
-        - sudo
-      when: ansible_facts['pkg_mgr'] != 'yum' or ansible_facts['pkg_mgr'] == 'yum'
-      # package module auto-selects manager
-
-    - name: Install Netdata using official kickstart (idempotent guard)
-      ansible.builtin.shell: |
-        if ! command -v netdata >/dev/null 2>&1; then
-          bash <(curl -Ss https://my-netdata.io/kickstart.sh) --dont-wait
-        fi
-      args:
-        warn: false
-      register: netdata_install
-      changed_when: "'Installing' in netdata_install.stdout or netdata_install.rc == 0 and netdata_install.stdout|length>0"
-      become: yes
-
-    - name: ensure netdata service is running and enabled
-      ansible.builtin.service:
-        name: netdata
-        enabled: yes
-        state: started
-      ignore_errors: yes
-
-    - name: Ensure netdata listens on 19999 in its config (if config exists)
-      ansible.builtin.lineinfile:
-        path: /etc/netdata/netdata.conf
-        regexp: '^  bind to ='
-        insertafter: '^bind to ='
-        line: '  bind to = 0.0.0.0'
-      when: ansible.builtin.stat(path='/etc/netdata/netdata.conf').stat.exists
-      ignore_errors: yes
+  roles:
+    - backend

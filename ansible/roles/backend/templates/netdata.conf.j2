@@ -1,0 +1,25 @@
+---
+- name: Install dependencies
+  apt:
+    name:
+      - software-properties-common
+      - curl
+    state: present
+    update_cache: yes
+
+- name: Add Netdata repository
+  apt_repository:
+    repo: "ppa:netdata/netdata"
+    state: present
+
+- name: Install netdata
+  apt:
+    name: netdata
+    state: present
+    update_cache: yes
+
+- name: Ensure netdata is running
+  systemd:
+    name: netdata
+    state: started
+    enabled: yes

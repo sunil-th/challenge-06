@@ -1,0 +1,24 @@
+---
+- name: Install nginx
+  package:
+    name: nginx
+    state: present
+
+- name: Copy nginx proxy config
+  template:
+    src: nginx_netdata.j2
+    dest: /etc/nginx/conf.d/netdata_upstream.conf
+    mode: '0644'
+  notify: restart nginx
+
+- name: Ensure nginx is running
+  systemd:
+    name: nginx
+    state: started
+    enabled: yes
+
+handlers:
+  - name: restart nginx
+    systemd:
+      name: nginx
+      state: restarted

@@ -1,18 +1,25 @@
-# automatically generated - proxy netdata backend servers
-upstream netdata_backend {
-{% for host in groups['backend'] %}
-  server {{ hostvars[host]['ansible_host'] | default(hostvars[host]['inventory_hostname']) }}:19999;
-{% endfor %}
-}
+---
+- name: Install dependencies
+  apt:
+    name:
+      - software-properties-common
+      - curl
+    state: present
+    update_cache: yes
 
-server {
-    listen 80;
-    server_name _;
+- name: Add Netdata repository
+  apt_repository:
+    repo: "ppa:netdata/netdata"
+    state: present
 
-    location / {
-        proxy_pass http://netdata_backend/;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    }
-}
+- name: Install netdata
+  apt:
+    name: netdata
+    state: present
+    update_cache: yes
+
+- name: Ensure netdata is running
+  systemd:
+    name: netdata
+    state: started
+    enabled: yes
