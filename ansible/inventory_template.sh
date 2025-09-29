@@ -72,19 +72,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-cd terraform
-
-# Read outputs safely
-c8_priv=$(terraform output -raw c8_private_ip)
-u21_priv=$(terraform output -raw u21_private_ip)
-
-cd ..
+# Use terraform -chdir to avoid cd gymnastics
+c8_priv=$(terraform -chdir=terraform output -raw c8_private_ip 2>/dev/null)
+u21_priv=$(terraform -chdir=terraform output -raw u21_private_ip 2>/dev/null)
 
 KEY_FILE="$PWD/.ci_keys/id_rsa"
 
 # Validate variables
 if [[ -z "$c8_priv" || -z "$u21_priv" ]]; then
-  echo "Error: Terraform outputs are empty. Run 'terraform apply' first."
+  echo "❌ Error: Terraform outputs are empty. Run 'terraform apply' first."
   exit 1
 fi
 

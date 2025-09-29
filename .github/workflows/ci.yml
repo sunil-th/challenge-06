@@ -154,3 +154,7 @@ jobs:
           ansible-playbook -i inventory.ini site.yml --private-key ../.ci_keys/id_rsa
         env:
           ANSIBLE_DEPRECATION_WARNINGS: "False"
+
+
+
+
