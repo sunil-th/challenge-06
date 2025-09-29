@@ -249,6 +249,119 @@
 
 
 
+# ---
+# - name: Common tasks for all servers
+#   hosts: all
+#   become: yes
+#   tasks:
+#     - name: Ensure /etc/hosts contains hostnames for cluster
+#       lineinfile:
+#         path: /etc/hosts
+#         regexp: "{{ hostvars[item]['ansible_host'] }}\\s+{{ item }}"
+#         line: "{{ hostvars[item]['ansible_host'] }} {{ item }}"
+#         state: present
+#       loop: "{{ groups['all'] }}"
+#       # This dynamically loops through all hosts in the inventory
+
+#     - name: Disable SELinux (RedHat)
+#       command: setenforce 0
+#       when: ansible_facts['os_family'] == 'RedHat'
+#       ignore_errors: yes
+
+#     - name: Persist SELinux disabled
+#       replace:
+#         path: /etc/selinux/config
+#         regexp: '^SELINUX=.*'
+#         replace: 'SELINUX=disabled'
+#       when: ansible_facts['os_family'] == 'RedHat'
+#       ignore_errors: yes
+
+#     - name: Stop firewalld on RedHat
+#       service:
+#         name: firewalld
+#         state: stopped
+#         enabled: no
+#       when: ansible_facts['os_family'] == 'RedHat'
+#       ignore_errors: yes
+
+#     - name: Stop ufw on Debian
+#       service:
+#         name: ufw
+#         state: stopped
+#         enabled: no
+#       when: ansible_facts['os_family'] == 'Debian'
+#       ignore_errors: yes
+
+# - name: Frontend tasks (Nginx)
+#   hosts: frontend
+#   become: yes
+#   tasks:
+#     - name: Install nginx
+#       package:
+#         name: nginx
+#         state: present
+
+#     - name: Copy nginx proxy config
+#       template:
+#         src: templates/nginx_netdata.j2
+#         dest: /etc/nginx/conf.d/netdata_upstream.conf
+#         mode: '0644'
+#       notify: restart nginx
+
+#     - name: Ensure nginx is running
+#       systemd:
+#         name: nginx
+#         state: started
+#         enabled: yes
+
+#   handlers:
+#     - name: restart nginx
+#       systemd:
+#         name: nginx
+#         state: restarted
+
+# - name: Backend tasks (Netdata)
+#   hosts: backend
+#   become: yes
+#   tasks:
+#     - name: Install prerequisites (Debian)
+#       package:
+#         name:
+#           - curl
+#           - sudo
+#         state: present
+#       when: ansible_facts['os_family'] == 'Debian'
+
+#     - name: Install Netdata via kickstart
+#       shell: bash <(curl -Ss https://my-netdata.io/kickstart.sh) --dont-wait
+#       args:
+#         warn: false
+#       register: netdata_result
+#       changed_when: "'FAILED' not in netdata_result.stderr"
+
+#     - name: Ensure netdata service is running
+#       systemd:
+#         name: netdata
+#         state: started
+#         enabled: yes
+
+#     - name: Ensure netdata listens on 0.0.0.0
+#       lineinfile:
+#         path: /etc/netdata/netdata.conf
+#         regexp: '^  bind to ='
+#         line: '  bind to = 0.0.0.0'
+#       notify: restart netdata
+#       ignore_errors: yes
+
+#   handlers:
+#     - name: restart netdata
+#       systemd:
+#         name: netdata
+#         state: restarted
+
+
+
+
 ---
 - name: Common tasks for all servers
   hosts: all
@@ -261,7 +374,6 @@
         line: "{{ hostvars[item]['ansible_host'] }} {{ item }}"
         state: present
       loop: "{{ groups['all'] }}"
-      # This dynamically loops through all hosts in the inventory
 
     - name: Disable SELinux (RedHat)
       command: setenforce 0

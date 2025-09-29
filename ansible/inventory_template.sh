@@ -33,6 +33,42 @@
 
 
 
+# #!/usr/bin/env bash
+# set -euo pipefail
+
+# cd terraform
+
+# # Read outputs safely
+# c8_priv=$(terraform output -raw c8_private_ip)
+# u21_priv=$(terraform output -raw u21_private_ip)
+
+# cd ..
+
+# KEY_FILE="$PWD/.ci_keys/id_rsa"
+
+# # Validate variables
+# if [[ -z "$c8_priv" || -z "$u21_priv" ]]; then
+#   echo "Error: Terraform outputs are empty. Run 'terraform apply' first."
+#   exit 1
+# fi
+
+# # Generate inventory
+# cat > ansible/inventory.ini <<EOF
+# [frontend]
+# c8.local ansible_host=${c8_priv} ansible_user=ec2-user ansible_ssh_private_key_file=${KEY_FILE}
+
+# [backend]
+# u21.local ansible_host=${u21_priv} ansible_user=ubuntu ansible_ssh_private_key_file=${KEY_FILE}
+
+# [all:vars]
+# ansible_python_interpreter=/usr/bin/python3
+# EOF
+
+# echo "✅ Wrote ansible/inventory.ini successfully"
+
+
+
+
 #!/usr/bin/env bash
 set -euo pipefail
 

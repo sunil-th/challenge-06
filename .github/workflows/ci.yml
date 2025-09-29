@@ -1,3 +1,81 @@
+# name: CI Deploy Terraform + Ansible
+
+# on:
+#   workflow_dispatch:
+#   push:
+#     branches:
+#       - main
+
+# jobs:
+#   deploy:
+#     runs-on: ubuntu-latest
+#     env:
+#       TF_IN_AUTOMATION: "true"
+#     steps:
+#       - name: Checkout repo
+#         uses: actions/checkout@v4
+
+#       - name: Setup Python (for ansible)
+#         uses: actions/setup-python@v4
+#         with:
+#           python-version: '3.11'
+
+#       - name: Generate SSH key for instances (kept in workspace)
+#         run: |
+#           mkdir -p .ci_keys
+#           ssh-keygen -t rsa -b 4096 -N "" -f .ci_keys/id_rsa
+#           chmod 600 .ci_keys/id_rsa
+#           echo "Private key and public key generated"
+
+#       - name: Set TF_VAR_public_key environment variable
+#         id: set_pub
+#         run: |
+#           echo "TF_VAR_public_key<<EOF" >> $GITHUB_ENV
+#           cat .ci_keys/id_rsa.pub >> $GITHUB_ENV
+#           echo "EOF" >> $GITHUB_ENV
+
+#       - name: Setup Terraform
+#         uses: hashicorp/setup-terraform@v2
+#         with:
+#           terraform_version: 1.5.0
+
+#       - name: Terraform init
+#         working-directory: terraform
+#         run: terraform init -input=false
+
+#       - name: Terraform apply
+#         working-directory: terraform
+#         env:
+#           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+#           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+#           AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+#         run: terraform apply -auto-approve
+
+#       - name: Render Ansible inventory
+#         run: |
+#           chmod +x ansible/inventory_template.sh
+#           ./ansible/inventory_template.sh
+#         env:
+#           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+#           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+#           AWS_REGION: ${{ secrets.AWS_REGION }}
+
+#       - name: Install Ansible
+#         run: |
+#           python -m pip install --upgrade pip
+#           pip install ansible
+
+#       - name: Run Ansible playbooks
+#         working-directory: ansible
+#         run: |
+#           ansible-playbook -i inventory.ini site.yml --private-key ../.ci_keys/id_rsa -u ec2-user
+#         env:
+#           ANSIBLE_DEPRECATION_WARNINGS: "False"
+
+
+
+
+
 name: CI Deploy Terraform + Ansible
 
 on:
@@ -68,6 +146,11 @@ jobs:
       - name: Run Ansible playbooks
         working-directory: ansible
         run: |
-          ansible-playbook -i inventory.ini site.yml --private-key ../.ci_keys/id_rsa -u ec2-user
+          echo "========= INVENTORY DEBUG ========="
+          cat inventory.ini
+          echo "==================================="
+          ansible-inventory -i inventory.ini --list --yaml
+          echo "========= RUNNING ANSIBLE ========="
+          ansible-playbook -i inventory.ini site.yml --private-key ../.ci_keys/id_rsa
         env:
           ANSIBLE_DEPRECATION_WARNINGS: "False"
