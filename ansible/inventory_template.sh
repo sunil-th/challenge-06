@@ -72,28 +72,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Use terraform -chdir to avoid cd gymnastics
-c8_priv=$(terraform -chdir=terraform output -raw c8_private_ip 2>/dev/null)
-u21_priv=$(terraform -chdir=terraform output -raw u21_private_ip 2>/dev/null)
+cd "$(dirname "$0")"
 
-KEY_FILE="$PWD/.ci_keys/id_rsa"
+# Capture Terraform outputs into variables
+c8_ip=$(terraform -chdir=../terraform output -raw c8_private_ip)
+u21_ip=$(terraform -chdir=../terraform output -raw u21_private_ip)
 
-# Validate variables
-if [[ -z "$c8_priv" || -z "$u21_priv" ]]; then
-  echo "❌ Error: Terraform outputs are empty. Run 'terraform apply' first."
-  exit 1
-fi
-
-# Generate inventory
-cat > ansible/inventory.ini <<EOF
+cat > inventory.ini <<EOL
 [frontend]
-c8.local ansible_host=${c8_priv} ansible_user=ec2-user ansible_ssh_private_key_file=${KEY_FILE}
+c8.local ansible_host=${c8_ip} ansible_user=ec2-user ansible_ssh_private_key_file=../.ci_keys/id_rsa
 
 [backend]
-u21.local ansible_host=${u21_priv} ansible_user=ubuntu ansible_ssh_private_key_file=${KEY_FILE}
+u21.local ansible_host=${u21_ip} ansible_user=ubuntu ansible_ssh_private_key_file=../.ci_keys/id_rsa
 
 [all:vars]
 ansible_python_interpreter=/usr/bin/python3
-EOF
+EOL
 
 echo "✅ Wrote ansible/inventory.ini successfully"
+cat inventory.ini
