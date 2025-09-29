@@ -69,25 +69,27 @@
 
 
 
-#!/usr/bin/env bash
-set -euo pipefail
 
-cd "$(dirname "$0")"
+#!/bin/bash
+set -e
 
-# Capture Terraform outputs into variables
-c8_ip=$(terraform -chdir=../terraform output -raw c8_private_ip)
-u21_ip=$(terraform -chdir=../terraform output -raw u21_private_ip)
+cd "$(dirname "$0")"   # ensure script runs from ansible/ dir
 
-cat > inventory.ini <<EOL
+# Get private IPs from terraform outputs
+C8_IP=$(terraform -chdir=../terraform output -raw c8_private_ip)
+U21_IP=$(terraform -chdir=../terraform output -raw u21_private_ip)
+
+# Write clean inventory.ini
+cat > inventory.ini <<EOF
 [frontend]
-c8.local ansible_host=${c8_ip} ansible_user=ec2-user ansible_ssh_private_key_file=../.ci_keys/id_rsa
+c8 ansible_host=$C8_IP ansible_user=ec2-user
 
 [backend]
-u21.local ansible_host=${u21_ip} ansible_user=ubuntu ansible_ssh_private_key_file=../.ci_keys/id_rsa
+u21 ansible_host=$U21_IP ansible_user=ubuntu
 
 [all:vars]
 ansible_python_interpreter=/usr/bin/python3
-EOL
+EOF
 
 echo "✅ Wrote ansible/inventory.ini successfully"
 cat inventory.ini

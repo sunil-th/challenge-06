@@ -74,8 +74,6 @@
 
 
 
-
-
 name: CI Deploy Terraform + Ansible
 
 on:
@@ -89,6 +87,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       TF_IN_AUTOMATION: "true"
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -103,10 +102,9 @@ jobs:
           mkdir -p .ci_keys
           ssh-keygen -t rsa -b 4096 -N "" -f .ci_keys/id_rsa
           chmod 600 .ci_keys/id_rsa
-          echo "Private key and public key generated"
+          echo "✅ Private key generated"
 
       - name: Set TF_VAR_public_key environment variable
-        id: set_pub
         run: |
           echo "TF_VAR_public_key<<EOF" >> $GITHUB_ENV
           cat .ci_keys/id_rsa.pub >> $GITHUB_ENV
@@ -117,11 +115,11 @@ jobs:
         with:
           terraform_version: 1.5.0
 
-      - name: Terraform init
+      - name: Terraform Init
         working-directory: terraform
         run: terraform init -input=false
 
-      - name: Terraform apply
+      - name: Terraform Apply
         working-directory: terraform
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -143,7 +141,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install ansible
 
-      - name: Run Ansible playbooks
+      - name: Run Ansible Playbooks
         working-directory: ansible
         run: |
           echo "========= INVENTORY DEBUG ========="
@@ -154,7 +152,3 @@ jobs:
           ansible-playbook -i inventory.ini site.yml --private-key ../.ci_keys/id_rsa
         env:
           ANSIBLE_DEPRECATION_WARNINGS: "False"
-
-
-
-
