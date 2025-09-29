@@ -70,16 +70,25 @@
 
 
 
+
 #!/bin/bash
 set -e
 
-cd "$(dirname "$0")"   # ensure script runs from ansible/ dir
+cd "$(dirname "$0")"  # cd to ansible/
 
-# Get private IPs from terraform outputs
-C8_IP=$(terraform -chdir=../terraform output -raw c8_private_ip)
-U21_IP=$(terraform -chdir=../terraform output -raw u21_private_ip)
+echo "DEBUG: Running terraform output commands..."
 
-# Write clean inventory.ini
+C8_IP=$(terraform -chdir=../terraform output -raw c8_private_ip || echo "")
+U21_IP=$(terraform -chdir=../terraform output -raw u21_private_ip || echo "")
+
+echo "DEBUG: C8_IP=$C8_IP"
+echo "DEBUG: U21_IP=$U21_IP"
+
+if [[ -z "$C8_IP" || -z "$U21_IP" ]]; then
+  echo "ERROR: One or both Terraform IP outputs are empty. Aborting."
+  exit 1
+fi
+
 cat > inventory.ini <<EOF
 [frontend]
 c8 ansible_host=$C8_IP ansible_user=ec2-user

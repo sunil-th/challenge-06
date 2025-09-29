@@ -269,3 +269,14 @@ output "ssh_private_key_path_for_ci" {
   value       = aws_key_pair.ci_key.key_name
   description = "Key name used in AWS - CI keeps private key locally (generated in CI)."
 }
+
+
+output "c8_private_ip" {
+  value = aws_instance.c8.private_ip
+  description = "Private IP of c8 instance"
+}
+
+output "u21_private_ip" {
+  value = aws_instance.u21.private_ip
+  description = "Private IP of u21 instance"
+}

@@ -127,6 +127,10 @@ jobs:
           AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
         run: terraform apply -auto-approve
 
+      - name: Debug Terraform outputs
+        working-directory: terraform
+        run: terraform output -json
+
       - name: Render Ansible inventory
         run: |
           chmod +x ansible/inventory_template.sh
