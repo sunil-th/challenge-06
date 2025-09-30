@@ -48,7 +48,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
 
-    env:   # 👈 Make secrets available to Terraform/Ansible
+    env:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_DEFAULT_REGION: us-east-1
@@ -65,15 +65,25 @@ jobs:
         run: terraform init
 
       - name: Terraform Apply
+        id: tf_apply
         working-directory: terraform
         run: terraform apply -auto-approve
 
-      - name: Setup Ansible
+      - name: Extract SSH Private Key
+        working-directory: terraform
         run: |
-          sudo apt update -y
-          sudo apt install -y ansible
+          terraform output -raw private_key_pem > ../ansible/ci_id_rsa
+          chmod 600 ../ansible/ci_id_rsa
+
+      - name: Install Ansible
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y ansible
 
       - name: Run Ansible Playbook
         working-directory: ansible
         run: |
-          ansible-playbook site.yml -i inventory.ini --private-key ../terraform/ci_id_rsa
+          ansible-playbook site.yml \
+            -i inventory.ini \
+            --private-key ci_id_rsa
+
