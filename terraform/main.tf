@@ -112,10 +112,25 @@ resource "tls_private_key" "ci_key" {
   rsa_bits  = 4096
 }
 
+# resource "aws_key_pair" "generated" {
+#   key_name   = "ci-key"
+#   public_key = tls_private_key.ci_key.public_key_openssh
+# }
+
+
 resource "aws_key_pair" "generated" {
-  key_name   = "ci-key"
+  key_name   = "ci-key-${random_string.suffix.result}"
   public_key = tls_private_key.ci_key.public_key_openssh
 }
+
+resource "random_string" "suffix" {
+  length  = 5
+  upper   = false
+  lower   = true
+  numeric = true
+  special = false
+}
+
 
 # Fetch default VPC
 data "aws_vpc" "default" {
