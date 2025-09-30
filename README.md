@@ -1,19 +1,19 @@
-# CI Pipeline with Terraform + Ansible
+# Terraform + Ansible CI pipeline
 
-This repository provisions and configures:
-- `c8.local` (Amazon Linux, frontend, nginx proxy)
-- `u21.local` (Ubuntu 21.04, backend, Netdata on 19999)
+1. Add GitHub secrets: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY (optional: AWS_REGION).
+2. Push to `main` branch to trigger workflow, or `workflow_dispatch`.
+3. The GitHub workflow will:
+   - terraform init/apply (creates EC2s and inventory),
+   - extract private key to ansible/ci_id_rsa,
+   - run ansible-playbook ansible/site.yml.
 
-## Workflow
-1. Terraform provisions 2 VMs in the default VPC.
-2. Terraform dynamically generates Ansible inventory (`ansible/inventory.ini`).
-3. GitHub Actions runs `ansible-playbook site.yml`.
-
-## Run locally
+Run locally (if desired):
 ```bash
 cd terraform
 terraform init
 terraform apply -auto-approve
-
+# then
 cd ../ansible
-ansible-playbook site.yml -i inventory.ini --private-key ../terraform/ci_id_rsa
+python3 -m pip install --upgrade pip
+python3 -m pip install ansible
+ansible-playbook site.yml -i inventory.ini --private-key ci_id_rsa

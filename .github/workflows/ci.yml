@@ -1,89 +1,56 @@
-# name: CI Pipeline - Terraform & Ansible
-
-# on:
-#   push:
-#     branches:
-#       - snap-1
-
-# jobs:
-#   deploy:
-#     runs-on: ubuntu-latest
-
-#     steps:
-#       - name: Checkout repository
-#         uses: actions/checkout@v3
-
-#       - name: Setup Terraform
-#         uses: hashicorp/setup-terraform@v2
-
-#       - name: Terraform Init
-#         working-directory: terraform
-#         run: terraform init
-
-#       - name: Terraform Apply
-#         working-directory: terraform
-#         run: terraform apply -auto-approve
-
-#       - name: Setup Ansible
-#         run: |
-#           sudo apt update -y
-#           sudo apt install -y ansible
-
-#       - name: Run Ansible Playbook
-#         working-directory: ansible
-#         run: |
-#           ansible-playbook site.yml -i inventory.ini --private-key ../terraform/ci_id_rsa
-
-
-
-
-name: CI Pipeline - Terraform & Ansible
+name: CI - Terraform + Ansible
 
 on:
   push:
-    branches:
-      - snap-1
+    branches: [ snap-1 ]
+  workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     env:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      AWS_DEFAULT_REGION: us-east-1
+      AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: '1.6.7'
 
-      - name: Terraform Init
+      - name: Terraform init
         working-directory: terraform
-        run: terraform init
+        run: terraform init -input=false
 
-      - name: Terraform Apply
+      - name: Terraform apply (create infra + generate inventory)
         id: tf_apply
         working-directory: terraform
         run: terraform apply -auto-approve
 
-      - name: Extract SSH Private Key
+      - name: Extract SSH private key for Ansible
         working-directory: terraform
         run: |
           terraform output -raw private_key_pem > ../ansible/ci_id_rsa
           chmod 600 ../ansible/ci_id_rsa
+          echo "Wrote ansible/ci_id_rsa"
 
-      - name: Install Ansible
+      - name: Show generated inventory (sanity)
+        run: sed -n '1,200p' ansible/inventory.ini || true
+
+      - name: Install Python and Ansible (on runner)
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y ansible
+          sudo apt-get install -y python3 python3-pip ssh
+          python3 -m pip install --upgrade pip
+          python3 -m pip install "ansible>=8.0"
 
-      - name: Run Ansible Playbook
+      - name: Run Ansible playbook
         working-directory: ansible
+        env:
+          ANSIBLE_HOST_KEY_CHECKING: 'False'
         run: |
-          ansible-playbook site.yml \
-            -i inventory.ini \
-            --private-key ci_id_rsa
-
+          ansible-playbook site.yml -i inventory.ini --private-key ci_id_rsa -u ec2-user
