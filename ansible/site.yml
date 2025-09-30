@@ -1,102 +1,191 @@
+# ---
+# # Common tasks: disable SELinux & firewalld
+# - name: Common setup
+#   hosts: all
+#   become: true
+#   tasks:
+#     - name: Disable SELinux persistently
+#       lineinfile:
+#         path: /etc/selinux/config
+#         regexp: '^SELINUX='
+#         line: 'SELINUX=disabled'
+#       ignore_errors: true
+
+#     - name: Stop and disable firewalld (RHEL only)
+#       service:
+#         name: firewalld
+#         state: stopped
+#         enabled: false
+#       when: ansible_os_family == "RedHat"
+#       ignore_errors: true
+
+# # Backend setup: Netdata
+# - name: Backend setup (Netdata)
+#   hosts: backend
+#   become: true
+#   tasks:
+#     - name: Install prerequisites
+#       apt:
+#         name: [curl, gnupg, lsb-release]
+#         state: present
+#         update_cache: true
+#       when: ansible_os_family == "Debian"
+
+#     - name: Add Netdata repo (Debian)
+#       apt_repository:
+#         repo: "deb https://packagecloud.io/netdata/netdata/ubuntu/ {{ ansible_lsb.codename }} main"
+#         state: present
+#       when: ansible_os_family == "Debian"
+
+#     - name: Install Netdata (Debian)
+#       apt:
+#         name: netdata
+#         state: latest
+#         update_cache: true
+#       when: ansible_os_family == "Debian"
+
+#     - name: Install Netdata (RHEL/Amazon)
+#       package:
+#         name: netdata
+#         state: latest
+#       when: ansible_os_family == "RedHat"
+
+#     - name: Configure Netdata to run on port 19999
+#       blockinfile:
+#         path: /etc/netdata/netdata.conf
+#         create: yes
+#         block: |
+#           [web]
+#           bind to = 0.0.0.0
+#           port = 19999
+#       notify: restart netdata
+
+#   handlers:
+#     - name: restart netdata
+#       service:
+#         name: netdata
+#         state: restarted
+#         enabled: true
+
+# # Frontend setup: nginx reverse proxy
+# - name: Frontend setup (nginx proxy)
+#   hosts: frontend
+#   become: true
+#   tasks:
+#     - name: Install nginx
+#       package:
+#         name: nginx
+#         state: present
+
+#     - name: Configure nginx proxy to backend
+#       copy:
+#         dest: /etc/nginx/conf.d/netdata_proxy.conf
+#         content: |
+#           upstream netdata_backends {
+#           {% for host in groups['backend'] %}
+#               server {{ hostvars[host].ansible_host }}:19999;
+#           {% endfor %}
+#           }
+#           server {
+#               listen 80;
+#               location / {
+#                   proxy_pass http://netdata_backends;
+#               }
+#           }
+#       notify: restart nginx
+
+#   handlers:
+#     - name: restart nginx
+#       service:
+#         name: nginx
+#         state: restarted
+#         enabled: true
+
+
+
+
+
 ---
-# Common tasks: disable SELinux & firewalld
 - name: Common setup
   hosts: all
   become: true
-  tasks:
-    - name: Disable SELinux persistently
-      lineinfile:
-        path: /etc/selinux/config
-        regexp: '^SELINUX='
-        line: 'SELINUX=disabled'
-      ignore_errors: true
+  vars:
+    selinux_config_file: /etc/selinux/config
 
-    - name: Stop and disable firewalld (RHEL only)
-      service:
+  tasks:
+    - name: Disable SELinux persistently (RHEL family only)
+      ansible.builtin.lineinfile:
+        path: "{{ selinux_config_file }}"
+        regexp: '^SELINUX='
+        line: SELINUX=disabled
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    - name: Stop and disable firewalld (RHEL family only)
+      ansible.builtin.service:
         name: firewalld
         state: stopped
-        enabled: false
+        enabled: no
       when: ansible_os_family == "RedHat"
-      ignore_errors: true
 
-# Backend setup: Netdata
+- name: Frontend setup (Nginx)
+  hosts: frontend
+  become: true
+
+  tasks:
+    - name: Install Nginx (Amazon Linux / RHEL)
+      ansible.builtin.yum:
+        name: nginx
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    - name: Install Nginx (Debian/Ubuntu)
+      ansible.builtin.apt:
+        name: nginx
+        state: present
+        update_cache: yes
+      when: ansible_os_family == "Debian"
+
+    - name: Configure Nginx reverse proxy to backend group
+      ansible.builtin.template:
+        src: nginx_reverse_proxy.conf.j2
+        dest: /etc/nginx/conf.d/reverse_proxy.conf
+      notify:
+        - Restart Nginx
+
+  handlers:
+    - name: Restart Nginx
+      ansible.builtin.service:
+        name: nginx
+        state: restarted
+        enabled: yes
+
 - name: Backend setup (Netdata)
   hosts: backend
   become: true
+
   tasks:
-    - name: Install prerequisites
-      apt:
-        name: [curl, gnupg, lsb-release]
+    - name: Install prerequisites (Debian)
+      ansible.builtin.apt:
+        name:
+          - curl
+          - git
+          - zlib1g-dev
         state: present
-        update_cache: true
+        update_cache: yes
       when: ansible_os_family == "Debian"
 
-    - name: Add Netdata repo (Debian)
-      apt_repository:
-        repo: "deb https://packagecloud.io/netdata/netdata/ubuntu/ {{ ansible_lsb.codename }} main"
+    - name: Install prerequisites (RHEL)
+      ansible.builtin.yum:
+        name:
+          - curl
+          - git
+          - zlib-devel
         state: present
-      when: ansible_os_family == "Debian"
-
-    - name: Install Netdata (Debian)
-      apt:
-        name: netdata
-        state: latest
-        update_cache: true
-      when: ansible_os_family == "Debian"
-
-    - name: Install Netdata (RHEL/Amazon)
-      package:
-        name: netdata
-        state: latest
       when: ansible_os_family == "RedHat"
 
-    - name: Configure Netdata to run on port 19999
-      blockinfile:
-        path: /etc/netdata/netdata.conf
-        create: yes
-        block: |
-          [web]
-          bind to = 0.0.0.0
-          port = 19999
-      notify: restart netdata
-
-  handlers:
-    - name: restart netdata
-      service:
-        name: netdata
-        state: restarted
-        enabled: true
-
-# Frontend setup: nginx reverse proxy
-- name: Frontend setup (nginx proxy)
-  hosts: frontend
-  become: true
-  tasks:
-    - name: Install nginx
-      package:
-        name: nginx
-        state: present
-
-    - name: Configure nginx proxy to backend
-      copy:
-        dest: /etc/nginx/conf.d/netdata_proxy.conf
-        content: |
-          upstream netdata_backends {
-          {% for host in groups['backend'] %}
-              server {{ hostvars[host].ansible_host }}:19999;
-          {% endfor %}
-          }
-          server {
-              listen 80;
-              location / {
-                  proxy_pass http://netdata_backends;
-              }
-          }
-      notify: restart nginx
-
-  handlers:
-    - name: restart nginx
-      service:
-        name: nginx
-        state: restarted
-        enabled: true
+    - name: Install Netdata using official script
+      ansible.builtin.shell: |
+        bash <(curl -Ss https://my-netdata.io/kickstart.sh) --dont-wait
+      args:
+        creates: /usr/sbin/netdata
