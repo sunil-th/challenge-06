@@ -83,14 +83,32 @@ data "aws_ami" "amazon_linux2" {
   }
 }
 
-data "aws_ami" "ubuntu_2104" {
+# data "aws_ami" "ubuntu_2104" {
+#   most_recent = true
+#   owners      = ["099720109477"] # Canonical
+#   filter {
+#     name   = "name"
+#     values = ["ubuntu/images/hvm-ssd/ubuntu-*-21.04-amd64-server-*"]
+#   }
+# }
+
+
+data "aws_ami" "ubuntu_2204" {
   most_recent = true
   owners      = ["099720109477"] # Canonical
+
   filter {
     name   = "name"
-    values = ["ubuntu/images/hvm-ssd/ubuntu-*-21.04-amd64-server-*"]
+    values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
   }
 }
+
+
 
 # Instance: Amazon Linux (c8.local)
 resource "aws_instance" "c8" {
@@ -119,7 +137,7 @@ resource "aws_instance" "c8" {
 
 # Instance: Ubuntu 21.04 (u21.local)
 resource "aws_instance" "u21" {
-  ami                    = length(var.ami_u21) > 0 ? var.ami_u21 : data.aws_ami.ubuntu_2104.id
+  ami                    = length(var.ami_u21) > 0 ? var.ami_u21 : data.aws_ami.ubuntu_2204.id
   instance_type          = var.instance_type
   key_name               = aws_key_pair.ci.key_name
   subnet_id              = data.aws_subnets.default.ids[0]
