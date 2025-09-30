@@ -45,33 +45,45 @@ data "aws_security_group" "default" {
   }
 }
 
-# Add ingress rules into the default security group (SSH, HTTP, Netdata)
-resource "aws_security_group_rule" "allow_ssh" {
-  type              = "ingress"
-  from_port         = 22
-  to_port           = 22
-  protocol          = "tcp"
-  cidr_blocks       = var.ssh_allowed_cidrs
-  security_group_id = data.aws_security_group.default.id
+# # Add ingress rules into the default security group (SSH, HTTP, Netdata)
+# resource "aws_security_group_rule" "allow_ssh" {
+#   type              = "ingress"
+#   from_port         = 22
+#   to_port           = 22
+#   protocol          = "tcp"
+#   cidr_blocks       = var.ssh_allowed_cidrs
+#   security_group_id = data.aws_security_group.default.id
+# }
+
+# resource "aws_security_group_rule" "allow_http" {
+#   type              = "ingress"
+#   from_port         = 80
+#   to_port           = 80
+#   protocol          = "tcp"
+#   cidr_blocks       = ["0.0.0.0/0"]
+#   security_group_id = data.aws_security_group.default.id
+# }
+
+# resource "aws_security_group_rule" "allow_netdata" {
+#   type              = "ingress"
+#   from_port         = 19999
+#   to_port           = 19999
+#   protocol          = "tcp"
+#   cidr_blocks       = ["0.0.0.0/0"]
+#   security_group_id = data.aws_security_group.default.id
+# }
+
+
+# Get default Security Group of default VPC
+data "aws_security_group" "default" {
+  filter {
+    name   = "group-name"
+    values = ["default"]
+  }
+
+  vpc_id = data.aws_vpc.default.id
 }
 
-resource "aws_security_group_rule" "allow_http" {
-  type              = "ingress"
-  from_port         = 80
-  to_port           = 80
-  protocol          = "tcp"
-  cidr_blocks       = ["0.0.0.0/0"]
-  security_group_id = data.aws_security_group.default.id
-}
-
-resource "aws_security_group_rule" "allow_netdata" {
-  type              = "ingress"
-  from_port         = 19999
-  to_port           = 19999
-  protocol          = "tcp"
-  cidr_blocks       = ["0.0.0.0/0"]
-  security_group_id = data.aws_security_group.default.id
-}
 
 # AMI lookups (if you passed ami_* variables they will override)
 data "aws_ami" "amazon_linux2" {
