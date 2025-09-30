@@ -103,8 +103,6 @@
 
 
 
-
-
 ---
 - name: Common setup
   hosts: all
@@ -113,6 +111,12 @@
     selinux_config_file: /etc/selinux/config
 
   tasks:
+    - name: Ensure Python3 is installed (RedHat family)
+      ansible.builtin.yum:
+        name: python3
+        state: present
+      when: ansible_os_family == "RedHat"
+
     - name: Disable SELinux persistently (RHEL family only)
       ansible.builtin.lineinfile:
         path: "{{ selinux_config_file }}"
@@ -165,7 +169,7 @@
   become: true
 
   tasks:
-    - name: Install prerequisites (Debian)
+    - name: Install prerequisites (Debian/Ubuntu)
       ansible.builtin.apt:
         name:
           - curl
@@ -175,7 +179,7 @@
         update_cache: yes
       when: ansible_os_family == "Debian"
 
-    - name: Install prerequisites (RHEL)
+    - name: Install prerequisites (RedHat/Amazon Linux)
       ansible.builtin.yum:
         name:
           - curl
@@ -184,8 +188,17 @@
         state: present
       when: ansible_os_family == "RedHat"
 
-    - name: Install Netdata using official script
-      ansible.builtin.shell: |
-        bash <(curl -Ss https://my-netdata.io/kickstart.sh) --dont-wait
+    - name: Install Netdata using official script (Debian/Ubuntu)
+      ansible.builtin.command: "bash <(curl -Ss https://my-netdata.io/kickstart.sh) --dont-wait"
       args:
         creates: /usr/sbin/netdata
+        executable: /bin/bash
+      become: true
+      when: ansible_os_family == "Debian"
+
+    - name: Install Netdata using official script (RedHat/Amazon Linux)
+      ansible.builtin.shell: "bash <(curl -Ss https://my-netdata.io/kickstart.sh) --dont-wait"
+      args:
+        creates: /usr/sbin/netdata
+      become: true
+      when: ansible_os_family == "RedHat"
