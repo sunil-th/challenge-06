@@ -1,3 +1,11 @@
+# --- Random suffix for unique names ---
+resource "random_string" "suffix" {
+  length  = 6
+  upper   = false
+  number  = true
+  special = false
+}
+
 # --- Generate SSH Key Pair ---
 resource "tls_private_key" "ci_key" {
   algorithm = "RSA"
@@ -5,7 +13,7 @@ resource "tls_private_key" "ci_key" {
 }
 
 resource "aws_key_pair" "ci" {
-  key_name   = "ci-key"
+  key_name   = "ci-key-${random_string.suffix.result}"
   public_key = tls_private_key.ci_key.public_key_openssh
 }
 
@@ -23,7 +31,7 @@ data "aws_subnets" "default" {
 
 # --- Security Group ---
 resource "aws_security_group" "ci_sg" {
-  name   = "ci-sg"
+  name   = "ci-sg-${random_string.suffix.result}"
   vpc_id = data.aws_vpc.default.id
 
   ingress {
