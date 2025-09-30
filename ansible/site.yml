@@ -1,19 +1,134 @@
+# ---
+# - name: Common setup
+#   hosts: all
+#   become: true
+#   vars:
+#     selinux_config_file: /etc/selinux/config
+
+#   tasks:
+#     # Ensure Python3 is installed on RedHat/Amazon Linux
+#     - name: Ensure Python3 is installed (RedHat family)
+#       ansible.builtin.yum:
+#         name: python3
+#         state: present
+#       when: ansible_os_family == "RedHat"
+
+#     # Disable SELinux on RedHat/Amazon Linux
+#     - name: Disable SELinux persistently (RedHat family)
+#       ansible.builtin.lineinfile:
+#         path: "{{ selinux_config_file }}"
+#         regexp: '^SELINUX='
+#         line: SELINUX=disabled
+#         state: present
+#       when: ansible_os_family == "RedHat"
+
+#     # Stop and disable firewalld on RedHat/Amazon Linux
+#     - name: Stop and disable firewalld (RedHat family)
+#       ansible.builtin.service:
+#         name: firewalld
+#         state: stopped
+#         enabled: no
+#       when: ansible_os_family == "RedHat"
+
+# - name: Frontend setup (Nginx)
+#   hosts: frontend
+#   become: true
+
+#   tasks:
+#     - name: Install Nginx (RedHat/Amazon Linux)
+#       ansible.builtin.yum:
+#         name: nginx
+#         state: present
+#       when: ansible_os_family == "RedHat"
+
+#     - name: Install Nginx (Debian/Ubuntu)
+#       ansible.builtin.apt:
+#         name: nginx
+#         state: present
+#         update_cache: yes
+#       when: ansible_os_family == "Debian"
+
+#     - name: Configure Nginx reverse proxy to backend group
+#       ansible.builtin.template:
+#         src: nginx_reverse_proxy.conf.j2
+#         dest: /etc/nginx/conf.d/reverse_proxy.conf
+#       notify:
+#         - Restart Nginx
+
+#   handlers:
+#     - name: Restart Nginx
+#       ansible.builtin.service:
+#         name: nginx
+#         state: restarted
+#         enabled: yes
+
+# - name: Backend setup (Netdata)
+#   hosts: backend
+#   become: true
+
+#   tasks:
+#     # Install prerequisites
+#     - name: Install prerequisites (Debian/Ubuntu)
+#       ansible.builtin.apt:
+#         name:
+#           - curl
+#           - git
+#           - zlib1g-dev
+#         state: present
+#         update_cache: yes
+#       when: ansible_os_family == "Debian"
+
+#     - name: Install prerequisites (RedHat/Amazon Linux)
+#       ansible.builtin.yum:
+#         name:
+#           - curl
+#           - git
+#           - zlib-devel
+#         state: present
+#       when: ansible_os_family == "RedHat"
+
+#     # Download Netdata script
+#     - name: Download Netdata install script
+#       ansible.builtin.get_url:
+#         url: https://my-netdata.io/kickstart.sh
+#         dest: /tmp/netdata-kickstart.sh
+#         mode: '0755'
+#       become: true
+
+#     # Run Netdata install script
+#     - name: Run Netdata install script
+#       ansible.builtin.shell: /bin/bash /tmp/netdata-kickstart.sh --dont-wait
+#       args:
+#         creates: /usr/sbin/netdata
+#       become: true
+
+
+
+
+
 ---
+# ------------------------------
+# Bootstrap Python3 on Amazon Linux
+# ------------------------------
+- name: Bootstrap Python3 on frontend (Amazon Linux)
+  hosts: frontend
+  gather_facts: no
+  become: true
+  tasks:
+    - name: Install Python3 (raw)
+      raw: yum install -y python3
+
+# ------------------------------
+# Common setup (all hosts)
+# ------------------------------
 - name: Common setup
   hosts: all
+  gather_facts: yes
   become: true
   vars:
     selinux_config_file: /etc/selinux/config
 
   tasks:
-    # Ensure Python3 is installed on RedHat/Amazon Linux
-    - name: Ensure Python3 is installed (RedHat family)
-      ansible.builtin.yum:
-        name: python3
-        state: present
-      when: ansible_os_family == "RedHat"
-
-    # Disable SELinux on RedHat/Amazon Linux
     - name: Disable SELinux persistently (RedHat family)
       ansible.builtin.lineinfile:
         path: "{{ selinux_config_file }}"
@@ -22,7 +137,6 @@
         state: present
       when: ansible_os_family == "RedHat"
 
-    # Stop and disable firewalld on RedHat/Amazon Linux
     - name: Stop and disable firewalld (RedHat family)
       ansible.builtin.service:
         name: firewalld
@@ -30,6 +144,9 @@
         enabled: no
       when: ansible_os_family == "RedHat"
 
+# ------------------------------
+# Frontend setup (Nginx)
+# ------------------------------
 - name: Frontend setup (Nginx)
   hosts: frontend
   become: true
@@ -62,12 +179,14 @@
         state: restarted
         enabled: yes
 
+# ------------------------------
+# Backend setup (Netdata)
+# ------------------------------
 - name: Backend setup (Netdata)
   hosts: backend
   become: true
 
   tasks:
-    # Install prerequisites
     - name: Install prerequisites (Debian/Ubuntu)
       ansible.builtin.apt:
         name:
@@ -87,17 +206,13 @@
         state: present
       when: ansible_os_family == "RedHat"
 
-    # Download Netdata script
     - name: Download Netdata install script
       ansible.builtin.get_url:
         url: https://my-netdata.io/kickstart.sh
         dest: /tmp/netdata-kickstart.sh
         mode: '0755'
-      become: true
 
-    # Run Netdata install script
     - name: Run Netdata install script
       ansible.builtin.shell: /bin/bash /tmp/netdata-kickstart.sh --dont-wait
       args:
         creates: /usr/sbin/netdata
-      become: true
