@@ -31,6 +31,10 @@ jobs:
         working-directory: terraform
         run: terraform apply -auto-approve
 
+
+      - name: Generate dynamic inventory
+        run: bash ansible/generate_inventory.sh
+
       - name: Extract SSH private key for Ansible
         working-directory: terraform
         run: |
