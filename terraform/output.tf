@@ -1,1 +1,7 @@
-# already declared outputs in main; you can keep them here or in main.tf
+output "c8_public_ip" {
+  value = aws_instance.c8.public_ip
+}
+
+output "u21_public_ip" {
+  value = aws_instance.u21.public_ip
+}
