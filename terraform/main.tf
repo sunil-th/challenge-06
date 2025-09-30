@@ -1,4 +1,3 @@
-
 # --- Generate SSH Key Pair ---
 resource "tls_private_key" "ci_key" {
   algorithm = "RSA"
@@ -97,4 +96,3 @@ EOT
 
   filename = "${path.module}/../ansible/inventory.ini"
 }
-
