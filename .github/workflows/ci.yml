@@ -26,21 +26,13 @@ jobs:
         working-directory: terraform
         run: terraform init -input=false
 
-      - name: Terraform apply (create infra + generate inventory)
+      - name: Terraform apply (create infra)
         id: tf_apply
         working-directory: terraform
         run: terraform apply -auto-approve
 
-
       - name: Generate dynamic inventory
         run: bash ansible/generate_inventory.sh
-
-      - name: Extract SSH private key for Ansible
-        working-directory: terraform
-        run: |
-          terraform output -raw private_key_pem > ../ansible/ci_id_rsa
-          chmod 600 ../ansible/ci_id_rsa
-          echo "Wrote ansible/ci_id_rsa"
 
       - name: Show generated inventory (sanity)
         run: sed -n '1,200p' ansible/inventory.ini || true
